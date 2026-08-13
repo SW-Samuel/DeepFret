@@ -2,4 +2,3 @@ librosa
 matplotlib
 streamlit
 torch
-libsndfile1
