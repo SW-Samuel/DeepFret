@@ -1,4 +1,5 @@
 import base64
+import gc
 import json
 import os
 import subprocess
@@ -7,6 +8,7 @@ from io import BytesIO
 
 import librosa
 import matplotlib
+
 matplotlib.use("Agg")  # Backend não-interativo para evitar falhas em servidores
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
@@ -358,11 +360,9 @@ def get_chord_image_base64(chord_name):
                 weight="bold",
             )
 
-# CÓDIGO CORRIGIDO:
     if "barre" in data:
         fret, start_str, end_str = data["barre"]
-        
-        # Substituído Rectangle por FancyBboxPatch com boxstyle round
+
         rect = patches.FancyBboxPatch(
             ((7 - end_str) - 0.28, -fret + 0.2),
             (end_str - start_str) + 0.56,
@@ -410,19 +410,24 @@ def get_chord_image_base64(chord_name):
 def separate_audio_demucs(audio_path):
     output_dir = tempfile.mkdtemp()
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    num_jobs = "4" if device == "cpu" else "1"
 
+    # Libera a memória RAM não utilizada antes da inferência
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    # Otimização para Streamlit Cloud: htdemucs_ft, segment de 4s, 1 thread
     cmd = [
         "demucs",
         "--two-stems=vocals",
         "-n",
-        "htdemucs",
+        "htdemucs_ft",
         "-d",
         device,
         "-j",
-        num_jobs,
-        "--shifts",
         "1",
+        "--segment",
+        "4",
         "-o",
         output_dir,
         audio_path,
@@ -432,7 +437,9 @@ def separate_audio_demucs(audio_path):
             cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
         filename = os.path.splitext(os.path.basename(audio_path))[0]
-        clean_path = os.path.join(output_dir, "htdemucs", filename, "no_vocals.wav")
+        clean_path = os.path.join(
+            output_dir, "htdemucs_ft", filename, "no_vocals.wav"
+        )
         if os.path.exists(clean_path):
             return clean_path
     except Exception:
