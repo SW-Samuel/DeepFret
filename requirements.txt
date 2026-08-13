@@ -2,5 +2,4 @@ librosa
 matplotlib
 streamlit
 torch
-ffmpeg
 libsndfile1
